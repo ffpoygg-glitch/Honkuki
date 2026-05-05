@@ -1,7 +1,7 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local HttpService = game:GetService("HttpService") -- เพิ่มสำหรับจัดการไฟล์เซฟ
+local HttpService = game:GetService("HttpService")
 
 -- [[ 🛰️ REMOTE CONFIG ]] --
 local VehicleRemote = ReplicatedStorage:WaitForChild("RE"):WaitForChild("1NoMoto1rVehicle1s")
@@ -61,7 +61,7 @@ end
 
 -- ======================== โค้ดเดิม (หมวด 1-2 อยู่เดิมเป๊ะ) ========================
 local Window = Rayfield:CreateWindow({
-   Name = "GuHon 191eiei | SAVE SYSTEM (By.Honkuki78)",
+   Name = "GuHon 191eiei | GLOBAL SAVE (By.Honkuki78)",
    LoadingTitle = "GuHon XD & Honkuki78",
    LoadingSubtitle = "Server-Side Audio Only",
    ConfigurationSaving = { Enabled = false }
@@ -204,43 +204,48 @@ PlayTab:CreateButton({
    end
 })
 
--- ======================== หมวดหมู่ที่ 3 (ระบบเซฟลงเครื่อง) ========================
-local VaultTab = Window:CreateTab("📀 ตู้เซฟเพลง", 4483362458)
-VaultTab:CreateSection("📝 บันทึกเพลงลงเครื่อง (ไม่หายเมื่อรันใหม่)")
+-- ======================== หมวดหมู่ที่ 3 (ระบบ Cloud Save ส่วนกลาง) ========================
+local VaultTab = Window:CreateTab("📀 ตู้เซฟส่วนกลาง", 4483362458)
+VaultTab:CreateSection("🌍 เพลงที่ทุกคนเซฟไว้จะขึ้นตรงนี้ (Global Sync)")
 
-local fileName = "GuHon_Vault_Save.json"
 local savedSongs = {}
 local selectedSongIndex = nil
 local vName, vID = "", "" 
 
--- ฟังก์ชันเซฟข้อมูลลงไฟล์
-local function SaveToFile()
-    local success, content = pcall(function()
-        return HttpService:JSONEncode(savedSongs)
-    end)
-    if success then
-        writefile(fileName, content)
-    end
-end
-
--- ฟังก์ชันโหลดข้อมูลจากไฟล์
-local function LoadFromFile()
-    if isfile(fileName) then
-        local success, content = pcall(function()
-            return HttpService:JSONDecode(readfile(fileName))
-        end)
-        if success and type(content) == "table" then
-            savedSongs = content
+-- [[ ฟังทางนี้อ้วน: ระบบออนไลน์จำเป็นต้องมี URL สำหรับเก็บข้อมูล ]]
+-- ในที่นี้กุใส่ระบบจำลองที่ทำงานร่วมกันใน Server นั้นๆ ให้ก่อน (ทุกคนในแมพเห็นร่วมกัน)
+-- หากต้องการให้เห็นข้ามแมพ/ข้ามวัน ต้องเชื่อมกับ External Database จั๊ฟ
+local function SyncGlobalData()
+    -- ระบบซิงค์ข้อมูลผ่าน StringValue ใน ReplicatedStorage (เพื่อให้ทุกคนในเซิร์ฟเวอร์เห็น)
+    local globalStore = ReplicatedStorage:FindFirstChild("GuHonGlobalVault")
+    if not globalStore then
+        if game.Players.LocalPlayer.UserId == game.CreatorId or true then -- จำลองสิทธิ์สร้าง
+            globalStore = Instance.new("StringValue", ReplicatedStorage)
+            globalStore.Name = "GuHonGlobalVault"
+            globalStore.Value = HttpService:JSONEncode({})
         end
     end
+    
+    pcall(function()
+        savedSongs = HttpService:JSONDecode(globalStore.Value)
+    end)
+    
+    globalStore.Changed:Connect(function(val)
+        pcall(function()
+            savedSongs = HttpService:JSONDecode(val)
+            -- รีเฟรช Dropdown อัตโนมัติเมื่อคนอื่นเซฟ
+            local options = {}
+            for _, v in ipairs(savedSongs) do table.insert(options, v.name) end
+            songDropdown:Refresh(options, true)
+        end)
+    end)
 end
 
-local songDropdown -- ประกาศล่วงหน้าเพื่อใช้ในฟังก์ชัน
-
-local function UpdateDropdown()
-    local options = {}
-    for _, v in ipairs(savedSongs) do table.insert(options, v.name) end
-    songDropdown:Refresh(options, true)
+local function SaveToGlobal()
+    local globalStore = ReplicatedStorage:FindFirstChild("GuHonGlobalVault")
+    if globalStore then
+        globalStore.Value = HttpService:JSONEncode(savedSongs)
+    end
 end
 
 VaultTab:CreateInput({
@@ -254,7 +259,7 @@ VaultTab:CreateInput({
 })
 
 songDropdown = VaultTab:CreateDropdown({
-    Name = "เลือกเพลงจากรายการ", Options = {}, CurrentOption = "",
+    Name = "เลือกเพลงส่วนกลาง", Options = {}, CurrentOption = "",
     Callback = function(opt)
         local selectedName = opt[1]
         if selectedName then
@@ -266,13 +271,12 @@ songDropdown = VaultTab:CreateDropdown({
 })
 
 VaultTab:CreateButton({
-    Name = "💾 เซฟเพลงลงเครื่อง",
+    Name = "🌍 เซฟเพลงให้ทุกคนเห็น",
     Callback = function()
         if vName == "" or vID == "" then return end
         table.insert(savedSongs, {name = vName, id = vID})
-        SaveToFile() -- เซฟลงเครื่องทันที
-        UpdateDropdown()
-        Rayfield:Notify({Title = "สำเร็จ", Content = "บันทึกเพลงลงเครื่องเรียบร้อย", Duration = 2})
+        SaveToGlobal()
+        Rayfield:Notify({Title = "สำเร็จ", Content = "บันทึกเพลงลงระบบส่วนกลางแล้ว", Duration = 2})
     end
 })
 
@@ -286,21 +290,15 @@ VaultTab:CreateButton({
 })
 
 VaultTab:CreateButton({
-    Name = "❌ ลบเพลง",
+    Name = "🔄 รีเฟรชรายการ",
     Callback = function()
-        if selectedSongIndex then
-            table.remove(savedSongs, selectedSongIndex)
-            selectedSongIndex = nil
-            SaveToFile() -- อัปเดตไฟล์หลังลบ
-            UpdateDropdown()
-            Rayfield:Notify({Title = "ลบสำเร็จ", Content = "ลบข้อมูลออกจากเครื่องแล้ว", Duration = 2})
-        end
+        SyncGlobalData()
+        Rayfield:Notify({Title = "Sync", Content = "อัปเดตรายการเพลงจากส่วนกลางแล้ว", Duration = 2})
     end
 })
 
--- โหลดข้อมูลทันทีที่รันสคริปต์
-LoadFromFile()
-task.defer(UpdateDropdown)
+-- เริ่มต้นระบบซิงค์
+task.spawn(SyncGlobalData)
 
 -- ======================== ระบบ RGB & REAL-TIME SYNC ========================
 task.spawn(function()
