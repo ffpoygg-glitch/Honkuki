@@ -1,11 +1,12 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local HttpService = game:GetService("HttpService") -- เพิ่มสำหรับจัดการไฟล์เซฟ
 
 -- [[ 🛰️ REMOTE CONFIG ]] --
 local VehicleRemote = ReplicatedStorage:WaitForChild("RE"):WaitForChild("1NoMoto1rVehicle1s")
 
--- ======================== [[ SYSTEM ENCODE + JUNK (ระบบส่วนกลาง) ]] ========================
+-- ======================== [[ SYSTEM ENCODE + JUNK ]] ========================
 local _JUNK = "83260119948695& \n [[191]] &%69=00"
 
 local function _urlEncode(str)
@@ -32,7 +33,7 @@ local MainSongLabel
 local MainDateLabel
 local MainTimeLabel
 
--- ฟังก์ชันเล่นเพลง (ใช้ร่วมกันทั้งสคริปต์ ไม่ต้องเขียน Junk ซ้ำ)
+-- ฟังก์ชันเล่นเพลงกลาง
 local function PlayMusicByID(musicID)
     if not musicID or musicID == "" then return end
     VehicleRemote:FireServer("PickingScooterMusicText", "140734563826532", true)
@@ -60,7 +61,7 @@ end
 
 -- ======================== โค้ดเดิม (หมวด 1-2 อยู่เดิมเป๊ะ) ========================
 local Window = Rayfield:CreateWindow({
-   Name = "GuHon 191eiei | SYNC FIXED (By.Honkuki78)",
+   Name = "GuHon 191eiei | SAVE SYSTEM (By.Honkuki78)",
    LoadingTitle = "GuHon XD & Honkuki78",
    LoadingSubtitle = "Server-Side Audio Only",
    ConfigurationSaving = { Enabled = false }
@@ -203,13 +204,44 @@ PlayTab:CreateButton({
    end
 })
 
--- ======================== หมวดหมู่ที่ 3 (ดึงค่า Junk จากหมวด 2 มาเล่น) ========================
+-- ======================== หมวดหมู่ที่ 3 (ระบบเซฟลงเครื่อง) ========================
 local VaultTab = Window:CreateTab("📀 ตู้เซฟเพลง", 4483362458)
-VaultTab:CreateSection("📝 บันทึกเพลง (ดึงระบบ Junk หมวด 2 มาใช้)")
+VaultTab:CreateSection("📝 บันทึกเพลงลงเครื่อง (ไม่หายเมื่อรันใหม่)")
 
+local fileName = "GuHon_Vault_Save.json"
 local savedSongs = {}
 local selectedSongIndex = nil
 local vName, vID = "", "" 
+
+-- ฟังก์ชันเซฟข้อมูลลงไฟล์
+local function SaveToFile()
+    local success, content = pcall(function()
+        return HttpService:JSONEncode(savedSongs)
+    end)
+    if success then
+        writefile(fileName, content)
+    end
+end
+
+-- ฟังก์ชันโหลดข้อมูลจากไฟล์
+local function LoadFromFile()
+    if isfile(fileName) then
+        local success, content = pcall(function()
+            return HttpService:JSONDecode(readfile(fileName))
+        end)
+        if success and type(content) == "table" then
+            savedSongs = content
+        end
+    end
+end
+
+local songDropdown -- ประกาศล่วงหน้าเพื่อใช้ในฟังก์ชัน
+
+local function UpdateDropdown()
+    local options = {}
+    for _, v in ipairs(savedSongs) do table.insert(options, v.name) end
+    songDropdown:Refresh(options, true)
+end
 
 VaultTab:CreateInput({
     Name = "ชื่อเพลง", PlaceholderText = "ตั้งชื่อ...",
@@ -221,7 +253,7 @@ VaultTab:CreateInput({
     Callback = function(t) vID = t end
 })
 
-local songDropdown = VaultTab:CreateDropdown({
+songDropdown = VaultTab:CreateDropdown({
     Name = "เลือกเพลงจากรายการ", Options = {}, CurrentOption = "",
     Callback = function(opt)
         local selectedName = opt[1]
@@ -234,14 +266,13 @@ local songDropdown = VaultTab:CreateDropdown({
 })
 
 VaultTab:CreateButton({
-    Name = "💾 เซฟเพลงลงตู้",
+    Name = "💾 เซฟเพลงลงเครื่อง",
     Callback = function()
         if vName == "" or vID == "" then return end
         table.insert(savedSongs, {name = vName, id = vID})
-        local options = {}
-        for _, v in ipairs(savedSongs) do table.insert(options, v.name) end
-        songDropdown:Refresh(options, true)
-        Rayfield:Notify({Title = "สำเร็จ", Content = "บันทึกเรียบร้อย", Duration = 2})
+        SaveToFile() -- เซฟลงเครื่องทันที
+        UpdateDropdown()
+        Rayfield:Notify({Title = "สำเร็จ", Content = "บันทึกเพลงลงเครื่องเรียบร้อย", Duration = 2})
     end
 })
 
@@ -249,7 +280,6 @@ VaultTab:CreateButton({
     Name = "▶️ เล่นเพลงนี้",
     Callback = function()
         if selectedSongIndex and savedSongs[selectedSongIndex] then
-            -- เรียกใช้ฟังก์ชันเดิมของหมวด 2 ทันที (ซิงค์ Junk และ UI หน้าหลักอัตโนมัติ)
             PlayMusicByID(savedSongs[selectedSongIndex].id)
         end
     end
@@ -261,12 +291,16 @@ VaultTab:CreateButton({
         if selectedSongIndex then
             table.remove(savedSongs, selectedSongIndex)
             selectedSongIndex = nil
-            local options = {}
-            for _, v in ipairs(savedSongs) do table.insert(options, v.name) end
-            songDropdown:Refresh(options, true)
+            SaveToFile() -- อัปเดตไฟล์หลังลบ
+            UpdateDropdown()
+            Rayfield:Notify({Title = "ลบสำเร็จ", Content = "ลบข้อมูลออกจากเครื่องแล้ว", Duration = 2})
         end
     end
 })
+
+-- โหลดข้อมูลทันทีที่รันสคริปต์
+LoadFromFile()
+task.defer(UpdateDropdown)
 
 -- ======================== ระบบ RGB & REAL-TIME SYNC ========================
 task.spawn(function()
@@ -292,3 +326,4 @@ task.spawn(function()
         task.wait(0.05)
     end
 end)
+
