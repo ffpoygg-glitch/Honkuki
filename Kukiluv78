@@ -5,7 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 -- [[ 🛰️ REMOTE CONFIG ]] --
 local VehicleRemote = ReplicatedStorage:WaitForChild("RE"):WaitForChild("1NoMoto1rVehicle1s")
 
--- ======================== [[ SYSTEM ENCODE + JUNK (สั้น) ]] ========================
+-- ======================== [[ SYSTEM ENCODE + JUNK (ระบบส่วนกลาง) ]] ========================
 local _JUNK = "83260119948695& \n [[191]] &%69=00"
 
 local function _urlEncode(str)
@@ -28,22 +28,16 @@ local StartTime = 0
 local SongDuration = 0
 local VisualSound = nil 
 
--- ตัวแปร Global สำหรับอัปเดต UI (แก้บั๊กเสียงไม่ดัง)
 local MainSongLabel
 local MainDateLabel
 local MainTimeLabel
 
--- ======================== ฟังก์ชันเล่นเพลงกลาง (SYNC SYSTEM) ========================
+-- ฟังก์ชันเล่นเพลง (ใช้ร่วมกันทั้งสคริปต์ ไม่ต้องเขียน Junk ซ้ำ)
 local function PlayMusicByID(musicID)
     if not musicID or musicID == "" then return end
-    
-    -- รอบที่ 1: ยิงไอดีปลอม
     VehicleRemote:FireServer("PickingScooterMusicText", "140734563826532", true)
     task.wait(0.01)
-    
-    -- รอบที่ 2: ส่ง payload จริง
-    local payload = _buildPayload(musicID)
-    VehicleRemote:FireServer("PickingScooterMusicText", payload, true)
+    VehicleRemote:FireServer("PickingScooterMusicText", _buildPayload(musicID), true)
 
     if VisualSound then VisualSound:Destroy() end
     VisualSound = Instance.new("Sound", game:GetService("SoundService"))
@@ -56,7 +50,6 @@ local function PlayMusicByID(musicID)
         StartTime = tick()
         IsPlaying = true
         VisualSound:Play()
-        
         local success, info = pcall(function() return MarketplaceService:GetProductInfo(tonumber(musicID)) end)
         if success and info then
             if MainSongLabel then MainSongLabel:Set("🎵 เพลง: " .. info.Name) end
@@ -65,7 +58,7 @@ local function PlayMusicByID(musicID)
     end)
 end
 
--- ======================== โค้ดเดิม (หมวด 1-2 ห้ามแตะ) ========================
+-- ======================== โค้ดเดิม (หมวด 1-2 อยู่เดิมเป๊ะ) ========================
 local Window = Rayfield:CreateWindow({
    Name = "GuHon 191eiei | SYNC FIXED (By.Honkuki78)",
    LoadingTitle = "GuHon XD & Honkuki78",
@@ -210,21 +203,21 @@ PlayTab:CreateButton({
    end
 })
 
--- ======================== หมวดหมู่ที่ 3 (แก้ไขระบบเซฟ 100%) ========================
+-- ======================== หมวดหมู่ที่ 3 (ดึงค่า Junk จากหมวด 2 มาเล่น) ========================
 local VaultTab = Window:CreateTab("📀 ตู้เซฟเพลง", 4483362458)
-VaultTab:CreateSection("📝 บันทึกเพลงที่ชอบ (เซฟติด + ซิงค์เสียง)")
+VaultTab:CreateSection("📝 บันทึกเพลง (ดึงระบบ Junk หมวด 2 มาใช้)")
 
 local savedSongs = {}
 local selectedSongIndex = nil
-local vName, vID = "", "" -- ตัวแปรดักค่า Callback ป้องกันไอดีว่าง
+local vName, vID = "", "" 
 
 VaultTab:CreateInput({
-    Name = "ชื่อเพลง", PlaceholderText = "ตั้งชื่อที่นี่...",
+    Name = "ชื่อเพลง", PlaceholderText = "ตั้งชื่อ...",
     Callback = function(t) vName = t end
 })
 
 VaultTab:CreateInput({
-    Name = "ID เพลง", PlaceholderText = "ใส่ ID ที่นี่...",
+    Name = "ID เพลง", PlaceholderText = "ใส่ ID...",
     Callback = function(t) vID = t end
 })
 
@@ -243,26 +236,21 @@ local songDropdown = VaultTab:CreateDropdown({
 VaultTab:CreateButton({
     Name = "💾 เซฟเพลงลงตู้",
     Callback = function()
-        if vName == "" or vID == "" then
-            Rayfield:Notify({Title = "เตือน", Content = "กรุณากรอกชื่อและ ID ให้ครบก่อนเซฟ", Duration = 2})
-            return
-        end
+        if vName == "" or vID == "" then return end
         table.insert(savedSongs, {name = vName, id = vID})
         local options = {}
         for _, v in ipairs(savedSongs) do table.insert(options, v.name) end
         songDropdown:Refresh(options, true)
-        Rayfield:Notify({Title = "สำเร็จ", Content = "บันทึกเพลงเรียบร้อย", Duration = 2})
+        Rayfield:Notify({Title = "สำเร็จ", Content = "บันทึกเรียบร้อย", Duration = 2})
     end
 })
 
 VaultTab:CreateButton({
-    Name = "▶️ เล่นเพลงนี้ (Sync หน้าหลัก)",
+    Name = "▶️ เล่นเพลงนี้",
     Callback = function()
         if selectedSongIndex and savedSongs[selectedSongIndex] then
+            -- เรียกใช้ฟังก์ชันเดิมของหมวด 2 ทันที (ซิงค์ Junk และ UI หน้าหลักอัตโนมัติ)
             PlayMusicByID(savedSongs[selectedSongIndex].id)
-            Rayfield:Notify({Title = "Vault Playing", Content = "กำลังเล่นเพลงที่เซฟไว้", Duration = 2})
-        else
-            Rayfield:Notify({Title = "เตือน", Content = "กรุณาเลือกเพลงก่อน", Duration = 2})
         end
     end
 })
@@ -284,20 +272,16 @@ VaultTab:CreateButton({
 task.spawn(function()
     local bars = {" ", " ", "▂", "▃", "▄", "▅", "▆", "▇", "█"}
     while true do
-        local color = Color3.fromHSV(tick() % 5 / 5, 1, 1)
-        pcall(function() game:GetService("CoreGui").Rayfield.Main.Elements.BackgroundColor3 = color end)
-        
+        pcall(function() game:GetService("CoreGui").Rayfield.Main.Elements.BackgroundColor3 = Color3.fromHSV(tick() % 5 / 5, 1, 1) end)
         if IsPlaying and SongDuration > 0 then
             local elapsed = math.floor(tick() - StartTime)
             if elapsed <= SongDuration then
                 local timeStr = string.format("%02d:%02d", math.floor(elapsed/60), elapsed%60) .. " / " .. string.format("%02d:%02d", math.floor(SongDuration/60), SongDuration%60)
                 if MainTimeLabel then MainTimeLabel:Set("⏳ เวลาเล่น: " .. timeStr) end
-                
                 local v = ""
                 for i = 1, 14 do
                     local loudness = (VisualSound and VisualSound.PlaybackLoudness) or 0
-                    local scale = math.clamp(math.floor(loudness / 40) + math.random(-1,1), 1, #bars)
-                    v = v .. bars[scale]
+                    v = v .. bars[math.clamp(math.floor(loudness / 40) + 1, 1, #bars)]
                 end
                 VisualLabel:Set("🔊 [ " .. v .. " ]")
             else
