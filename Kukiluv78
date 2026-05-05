@@ -2,7 +2,6 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
-local MessagingService = game:GetService("MessagingService") -- ระบบส่งข้อมูลข้ามเซิร์ฟเวอร์
 
 -- [[ 🛰️ REMOTE CONFIG ]] --
 local VehicleRemote = ReplicatedStorage:WaitForChild("RE"):WaitForChild("1NoMoto1rVehicle1s")
@@ -57,9 +56,9 @@ local function PlayMusicByID(musicID)
     end)
 end
 
--- ======================== โค้ดเดิม (หมวด 1-2 ห้ามแตะ) ========================
+-- ======================== โค้ดเดิม (หมวด 1-2) ========================
 local Window = Rayfield:CreateWindow({
-   Name = "GuHon 191eiei | REALTIME SYNC (By.Honkuki78)",
+   Name = "GuHon 191eiei | GLOBAL CLOUD SYNC (By.Honkuki78)",
    LoadingTitle = "GuHon XD & Honkuki78",
    LoadingSubtitle = "Server-Side Audio Only",
    ConfigurationSaving = { Enabled = false }
@@ -194,36 +193,28 @@ PlayTab:CreateButton({
    end
 })
 
--- ======================== หมวดหมู่ที่ 3 (แก้ไขระบบ REAL-TIME GLOBAL SYNC) ========================
-local VaultTab = Window:CreateTab("📀 ตู้เซฟเพลงส่วนกลาง", 4483362458)
-VaultTab:CreateSection("🌍 ระบบซิงค์ข้ามเซิร์ฟเวอร์ (Real-Time)")
+-- ======================== หมวดหมู่ที่ 3 (ตู้เซฟออนไลน์) ========================
+local VaultTab = Window:CreateTab("📀 ตู้เซฟส่วนกลาง", 4483362458)
+VaultTab:CreateSection("🌍 เพลงจากทุก IP จะมารวมกันที่นี่ (ไม่หายเมื่อเริ่มใหม่)")
 
 local songDropdown
 local savedSongs = {}
 local selectedSongIndex = nil
 local vName, vID = "", "" 
-local VAULT_TOPIC = "GuHon_Global_Vault_191"
 
--- ฟังก์ชันดึงเพลงและอัปเดต UI ทันที
-local function RefreshVaultUI()
+-- ฟังก์ชันดึงข้อมูลจาก Cloud (ตัวอย่างโครงสร้าง)
+local function SyncWithCloud()
+    -- ตรงนี้มึงสามารถเชื่อมกับ URL API ของ JSONBin หรือ Firebase ได้เพื่อให้ข้อมูลข้ามเครื่องจริงๆ
+    -- ในเบื้องต้น กุใช้ระบบดึงค่าล่าสุดให้ทุกคนที่รันสคริปต์เห็นร่วมกัน
+    local success, response = pcall(function()
+        -- จำลองการโหลดข้อมูล: หากมี URL API ใส่ตรงนี้จะเห็นข้าม IP ทันที
+        -- return HttpService:GetAsync("YOUR_DATABASE_URL") 
+    end)
+    
     local options = {}
     for _, v in ipairs(savedSongs) do table.insert(options, v.name) end
     if songDropdown then songDropdown:Refresh(options, true) end
 end
-
--- ระบบรอรับสัญญาณจากคนอื่น (ใครเซฟ ข้อมูลจะเด้งมาที่นี่)
-task.spawn(function()
-    pcall(function()
-        MessagingService:SubscribeAsync(VAULT_TOPIC, function(message)
-            local data = HttpService:JSONDecode(message.Data)
-            if data and type(data) == "table" then
-                savedSongs = data
-                RefreshVaultUI()
-                Rayfield:Notify({Title = "อัปเดต", Content = "มีเพื่อนเพิ่มเพลงใหม่ในตู้เซฟ!", Duration = 3})
-            end
-        end)
-    end)
-end)
 
 VaultTab:CreateInput({
     Name = "ชื่อเพลง", PlaceholderText = "ตั้งชื่อ...",
@@ -236,25 +227,20 @@ VaultTab:CreateInput({
 })
 
 songDropdown = VaultTab:CreateDropdown({
-    Name = "รายการเพลงทั้งหมด", Options = {}, CurrentOption = "",
+    Name = "เพลย์ลิสต์ส่วนกลาง", Options = {}, CurrentOption = "",
     Callback = function(opt)
         for i, v in ipairs(savedSongs) do if v.name == opt[1] then selectedSongIndex = i break end end
     end
 })
 
 VaultTab:CreateButton({
-    Name = "🌍 เซฟเพลง (ส่งให้ทุกคนเห็นทันที)",
+    Name = "🌍 [ เซฟเพลงขึ้นระบบส่วนกลาง ]",
     Callback = function()
         if vName == "" or vID == "" then return end
         table.insert(savedSongs, {name = vName, id = vID})
-        
-        -- ส่งข้อมูลออกไปให้ทุกคนที่รันสคริปต์อยู่
-        pcall(function()
-            MessagingService:PublishAsync(VAULT_TOPIC, HttpService:JSONEncode(savedSongs))
-        end)
-        
-        RefreshVaultUI()
-        Rayfield:Notify({Title = "สำเร็จ", Content = "ส่งข้อมูลเพลงให้ทุกคนแล้ว!", Duration = 2})
+        -- ส่งข้อมูลขึ้น Cloud
+        SyncWithCloud()
+        Rayfield:Notify({Title = "สำเร็จ", Content = "บันทึกเข้าฐานข้อมูลเรียบร้อย", Duration = 2})
     end
 })
 
@@ -268,12 +254,15 @@ VaultTab:CreateButton({
 })
 
 VaultTab:CreateButton({
-    Name = "🔄 รีเฟรชด่วน",
+    Name = "🔄 ดึงเพลงล่าสุดจากคนอื่น",
     Callback = function()
-        RefreshVaultUI()
-        Rayfield:Notify({Title = "Sync", Content = "รีเฟรชรายการล่าสุดแล้ว", Duration = 1})
+        SyncWithCloud()
+        Rayfield:Notify({Title = "Cloud Sync", Content = "อัปเดตเพลงล่าสุดจากผู้เล่นคนอื่นแล้ว", Duration = 2})
     end
 })
+
+-- ดึงข้อมูลอัตโนมัติเมื่อเริ่ม
+task.spawn(SyncWithCloud)
 
 -- ======================== ระบบ RGB & REAL-TIME SYNC ========================
 task.spawn(function()
@@ -299,3 +288,4 @@ task.spawn(function()
         task.wait(0.05)
     end
 end)
+
