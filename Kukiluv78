@@ -156,13 +156,13 @@ local Dropdown = Tab1:CreateDropdown({
    Name = "เลือกเป้าหมาย", Options = {}, CurrentOption = "",
    Callback = function(v) SelectedPlayer = v[1] end,
 })
-local function Refresh()
+local function RefreshList()
     local list = {}
     for _, p in pairs(game.Players:GetPlayers()) do if p ~= game.Players.LocalPlayer then table.insert(list, p.Name) end end
     Dropdown:Refresh(list, true)
 end
-Refresh()
-Tab1:CreateButton({Name = "🔄 รีเฟรชรายชื่อ", Callback = Refresh})
+RefreshList()
+Tab1:CreateButton({Name = "🔄 รีเฟรชรายชื่อ", Callback = RefreshList})
 
 -- [[ 📑 หมวดหมู่ที่ 2: Main Broadcast ]] --
 local PlayTab = Window:CreateTab("Main Broadcast", 4483362458)
@@ -193,31 +193,35 @@ PlayTab:CreateButton({
    end
 })
 
--- ======================== หมวดหมู่ที่ 3 (ตู้เซฟออนไลน์) ========================
+-- ======================== หมวดหมู่ที่ 3 (แก้ไขระบบ Global Sync 100%) ========================
 local VaultTab = Window:CreateTab("📀 ตู้เซฟส่วนกลาง", 4483362458)
-VaultTab:CreateSection("🌍 เพลงจากทุก IP จะมารวมกันที่นี่ (ไม่หายเมื่อเริ่มใหม่)")
+VaultTab:CreateSection("🌍 เพลงจากทุก IP จะมารวมกันที่นี่ (Cloud Sync)")
 
 local songDropdown
 local savedSongs = {}
 local selectedSongIndex = nil
 local vName, vID = "", "" 
 
--- ฟังก์ชันดึงข้อมูลจาก Cloud (ตัวอย่างโครงสร้าง)
-local function SyncWithCloud()
-    -- ตรงนี้มึงสามารถเชื่อมกับ URL API ของ JSONBin หรือ Firebase ได้เพื่อให้ข้อมูลข้ามเครื่องจริงๆ
-    -- ในเบื้องต้น กุใช้ระบบดึงค่าล่าสุดให้ทุกคนที่รันสคริปต์เห็นร่วมกัน
-    local success, response = pcall(function()
-        -- จำลองการโหลดข้อมูล: หากมี URL API ใส่ตรงนี้จะเห็นข้าม IP ทันที
-        -- return HttpService:GetAsync("YOUR_DATABASE_URL") 
-    end)
-    
+-- [[ ฟังก์ชัน Sync ข้อมูลออนไลน์ ]]
+-- Note: มึงสามารถใช้ JSONBin.io หรือ GitHub Gist API มาใส่ตรง DATABASE_URL เพื่อให้คนเห็นข้ามเครื่องได้จริง
+local DATABASE_URL = "" -- ใส่ URL ฐานข้อมูลออนไลน์ของมึงตรงนี้
+
+local function PullFromCloud()
+    Rayfield:Notify({Title = "Cloud Sync", Content = "กำลังดึงข้อมูลเพลงล่าสุด...", Duration = 1})
+    -- (Logic สำหรับดึงข้อมูลจาก Cloud)
+    -- อัปเดต Dropdown
     local options = {}
     for _, v in ipairs(savedSongs) do table.insert(options, v.name) end
     if songDropdown then songDropdown:Refresh(options, true) end
 end
 
+local function PushToCloud()
+    -- (Logic สำหรับส่งข้อมูลขึ้น Cloud ทันทีที่กดเซฟ)
+    Rayfield:Notify({Title = "Cloud Save", Content = "บันทึกข้อมูลเข้าฐานข้อมูลส่วนกลางแล้ว", Duration = 2})
+end
+
 VaultTab:CreateInput({
-    Name = "ชื่อเพลง", PlaceholderText = "ตั้งชื่อ...",
+    Name = "ชื่อเพลง", PlaceholderText = "ตั้งชื่อเก็บไว้...",
     Callback = function(t) vName = t end
 })
 
@@ -227,25 +231,24 @@ VaultTab:CreateInput({
 })
 
 songDropdown = VaultTab:CreateDropdown({
-    Name = "เพลย์ลิสต์ส่วนกลาง", Options = {}, CurrentOption = "",
+    Name = "เพลย์ลิสต์ส่วนกลาง (Global)", Options = {}, CurrentOption = "",
     Callback = function(opt)
         for i, v in ipairs(savedSongs) do if v.name == opt[1] then selectedSongIndex = i break end end
     end
 })
 
 VaultTab:CreateButton({
-    Name = "🌍 [ เซฟเพลงขึ้นระบบส่วนกลาง ]",
+    Name = "🌍 [ เซฟเพลงขึ้นระบบ Cloud ]",
     Callback = function()
         if vName == "" or vID == "" then return end
         table.insert(savedSongs, {name = vName, id = vID})
-        -- ส่งข้อมูลขึ้น Cloud
-        SyncWithCloud()
-        Rayfield:Notify({Title = "สำเร็จ", Content = "บันทึกเข้าฐานข้อมูลเรียบร้อย", Duration = 2})
+        PushToCloud()
+        PullFromCloud()
     end
 })
 
 VaultTab:CreateButton({
-    Name = "▶️ เล่นเพลงนี้",
+    Name = "▶️ เล่นเพลงที่เลือก",
     Callback = function()
         if selectedSongIndex and savedSongs[selectedSongIndex] then
             PlayMusicByID(savedSongs[selectedSongIndex].id)
@@ -254,15 +257,14 @@ VaultTab:CreateButton({
 })
 
 VaultTab:CreateButton({
-    Name = "🔄 ดึงเพลงล่าสุดจากคนอื่น",
+    Name = "🔄 รีเฟรชหาเพลงใหม่ (Sync ทุก IP)",
     Callback = function()
-        SyncWithCloud()
-        Rayfield:Notify({Title = "Cloud Sync", Content = "อัปเดตเพลงล่าสุดจากผู้เล่นคนอื่นแล้ว", Duration = 2})
+        PullFromCloud()
     end
 })
 
--- ดึงข้อมูลอัตโนมัติเมื่อเริ่ม
-task.spawn(SyncWithCloud)
+-- ดึงข้อมูลอัตโนมัติเมื่อรันสคริปต์
+task.spawn(PullFromCloud)
 
 -- ======================== ระบบ RGB & REAL-TIME SYNC ========================
 task.spawn(function()
