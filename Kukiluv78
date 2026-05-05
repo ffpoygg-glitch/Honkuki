@@ -3,13 +3,14 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 
--- [[ 💾 ระบบตู้เซฟเพลง ]] --
-local FileName = "GuHon_Vault_V19_Ultimate.json"
+-- [[ 💾 DATA SYSTEM ]] --
+local FileName = "GuHon_Vault_V19.json"
 local SavedSongs = {}
 if isfile(FileName) then
     pcall(function() SavedSongs = HttpService:JSONDecode(readfile(FileName)) end)
 end
-local function SaveData()
+
+local function SaveToFile()
     writefile(FileName, HttpService:JSONEncode(SavedSongs))
 end
 
@@ -18,28 +19,24 @@ local VehicleRemote = ReplicatedStorage:WaitForChild("RE"):WaitForChild("1NoMoto
 local CurrentID, IsPlaying, IsLooping = "", false, false
 local StartTime, SongDuration, VisualSound = 0, 0, nil 
 
--- [[ 🛡️ หมวดหมู่ 1: โค้ดเดิมมึง (CleanID & DeepHunt) ]] --
-local function CleanID(str)
-    if not str or type(str) ~= "string" then return nil end
-    local allNumbers = {}
-    for num in str:gmatch("%d+") do table.insert(allNumbers, num) end
-    if #allNumbers > 0 then
-        local rawId = allNumbers[#allNumbers]
-        if #rawId >= 6 then return rawId end
-    end
-    return nil
-end
-
 local Window = Rayfield:CreateWindow({
-   Name = "GuHon V19 | ULTIMATE BYPASS (By.Honkuki78)",
+   Name = "GuHon V19 | VAULT FIX (By.Honkuki78)",
    LoadingTitle = "GuHon XD & Honkuki78",
-   LoadingSubtitle = "Logger + Broadcast + Vault",
+   LoadingSubtitle = "Music System & Vault Fixed",
    ConfigurationSaving = { Enabled = false }
 })
 
--- [[ 📑 หน้าที่ 1: Bypass Logger (คงเดิม) ]] --
+-- [[ 🛡️ LOGIC CLEAN ID ]] --
+local function CleanID(str)
+    if not str or type(str) ~= "string" then return nil end
+    local num = str:match("%d+")
+    if num and #num >= 6 then return num end
+    return nil
+end
+
+-- [[ 📑 หน้าที่ 1: Bypass Logger (เหมือนเดิม) ]] --
 local Tab1 = Window:CreateTab("Bypass Logger", 4483362458)
-local ResultLabel = Tab1:CreateLabel("🎯 สถานะ: พร้อมเจาะรหัส")
+local ResLabel = Tab1:CreateLabel("🎯 สถานะ: พร้อมเจาะรหัส")
 
 Tab1:CreateButton({
    Name = "🛰️ [ ดึงคนใกล้ที่สุด ]",
@@ -54,15 +51,17 @@ Tab1:CreateButton({
        if target then
            pcall(function()
                for _, obj in pairs(target.Character:GetDescendants()) do
-                   local id = (obj:IsA("Sound") and CleanID(obj.SoundId))
-                   if id then CurrentID = id; ResultLabel:Set("✅ เจาะได้แล้ว! ID: "..id); setclipboard(id); return end
+                   if obj:IsA("Sound") then
+                       local id = CleanID(obj.SoundId)
+                       if id then CurrentID = id; ResLabel:Set("✅ เจาะได้แล้ว! ID: "..id); setclipboard(id); return end
+                   end
                end
            end)
        end
    end
 })
 
--- [[ 📑 หน้าที่ 2: Main Broadcast (เพิ่ม Loop) ]] --
+-- [[ 📑 หน้าที่ 2: Main Broadcast ]] --
 local PlayTab = Window:CreateTab("Main Broadcast", 4483362458)
 local SongTitle = PlayTab:CreateLabel("🎵 เพลง: -")
 local TimeLabel = PlayTab:CreateLabel("⏳ เวลาเล่น: 00:00 / 00:00")
@@ -89,45 +88,67 @@ end
 PlayTab:CreateToggle({
    Name = "🔁 ระบบวนลูปเพลง (Auto Loop)",
    CurrentValue = false,
-   Callback = function(Value) IsLooping = Value end,
+   Callback = function(v) IsLooping = v end,
 })
-
 PlayTab:CreateButton({ Name = "🔥 [ ส่งรีโมทเปิดเพลง ]", Callback = function() RunMusic() end })
 
--- [[ 📑 หน้าที่ 3: Music Vault (ระบบเซฟ & สลับหน้าอัตโนมัติ) ]] --
+-- [[ 📑 หน้าที่ 3: Music Vault (แก้บั๊กกดเซฟแล้วไม่ขึ้น) ]] --
 local VaultTab = Window:CreateTab("Music Vault", 4483362458)
-local SaveName = ""
+local SaveNameInput = ""
+local SaveIDInput = ""
+
 VaultTab:CreateInput({
-   Name = "ชื่อเพลงที่จะเซฟ",
-   PlaceholderText = "ตั้งชื่อ...",
-   Callback = function(t) SaveName = t end,
+   Name = "1. ใส่ชื่อเพลง",
+   PlaceholderText = "ตั้งชื่อที่นี่...",
+   Callback = function(t) SaveNameInput = t end,
 })
+
+VaultTab:CreateInput({
+   Name = "2. ใส่ ID เพลง (หรือเจาะมาแล้วกดเซฟได้เลย)",
+   PlaceholderText = "ใส่ ID ที่นี่...",
+   Callback = function(t) SaveIDInput = CleanID(t) or t end,
+})
+
+-- ฟังก์ชันสร้างปุ่มเพลง (แยกออกมาเพื่อให้เรียกใช้ซ้ำได้)
+local function AddSongButton(name, id)
+    VaultTab:CreateButton({
+        Name = "▶️ เล่น: " .. name, -- แสดงแค่ชื่อเพลงตามสั่ง
+        Callback = function()
+            CurrentID = id
+            setclipboard(id)
+            RunMusic(id)
+            Window:SelectTab(PlayTab)
+            Rayfield:Notify({Title = "Quick Play", Content = "กำลังเล่น: "..name, Duration = 2})
+        end
+    })
+end
 
 VaultTab:CreateButton({
    Name = "💾 [ บันทึกลงตู้เซฟ ]",
    Callback = function()
-       if SaveName ~= "" and CurrentID ~= "" then
-           table.insert(SavedSongs, {Name = SaveName, ID = CurrentID})
-           SaveData()
-           Rayfield:Notify({Title = "Success", Content = "บันทึกแล้ว!", Duration = 2})
+       local finalID = (SaveIDInput ~= "" and SaveIDInput) or CurrentID
+       if SaveNameInput ~= "" and finalID ~= "" then
+           -- เซฟลงข้อมูล
+           table.insert(SavedSongs, {Name = SaveNameInput, ID = finalID})
+           SaveToFile()
+           
+           -- สร้างปุ่มใหม่ให้เห็นทันที (แก้บั๊กที่มึงเจอ)
+           AddSongButton(SaveNameInput, finalID)
+           
+           Rayfield:Notify({Title = "สำเร็จ!", Content = "บันทึกเพลง " .. SaveNameInput .. " แล้ว", Duration = 2})
+       else
+           Rayfield:Notify({Title = "ผิดพลาด", Content = "กรุณาใส่ชื่อเพลงและ ID ให้ครบ", Duration = 3})
        end
    end
 })
 
 VaultTab:CreateSection("รายการเพลงที่เซฟไว้")
+-- โหลดเพลงเก่าที่เคยเซฟไว้
 for _, item in pairs(SavedSongs) do
-    VaultTab:CreateButton({
-        Name = "▶️ เล่น: " .. item.Name,
-        Callback = function()
-            CurrentID = item.ID
-            setclipboard(item.ID)
-            RunMusic(item.ID) -- ยิง Remote ทันที
-            Window:SelectTab(PlayTab) -- สลับหน้าไป Tab 2 อัตโนมัติ
-        end
-    })
+    AddSongButton(item.Name, item.ID)
 end
 
--- [[ 🌈 RGB & Loop Checker ]] --
+-- [[ 🌈 RGB & Loop System ]] --
 task.spawn(function()
     while true do
         local c = Color3.fromHSV(tick() % 5 / 5, 1, 1)
@@ -142,4 +163,3 @@ task.spawn(function()
         task.wait(0.1)
     end
 end)
-
