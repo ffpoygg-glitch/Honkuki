@@ -3,8 +3,8 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 
--- [[ 💾 DATA SYSTEM (Music Vault) ]] --
-local FileName = "GuHon_Vault_Final.json"
+-- [[ 💾 DATA SYSTEM ]] --
+local FileName = "GuHon_Vault_V19.json"
 local SavedSongs = {}
 if isfile(FileName) then
     pcall(function() SavedSongs = HttpService:JSONDecode(readfile(FileName)) end)
@@ -15,23 +15,21 @@ end
 
 -- [[ 🛰️ CONFIG & VARS ]] --
 local VehicleRemote = ReplicatedStorage:WaitForChild("RE"):WaitForChild("1NoMoto1rVehicle1s")
-local _JUNK = "ขยะ" -- ตัวแปร Junk ตามที่มึงสั่ง
+local _JUNK = "ขยะ" 
 local CurrentID, IsPlaying, IsLooping = "", false, false
 local StartTime, SongDuration, VisualSound = 0, 0, nil 
 
--- [[ 🛡️ AUDIO MASKING LOGIC (ระบบกันดึงแบบสั้น) ]] --
+-- [[ 🛡️ AUDIO MASKING (กันดึง) ]] --
 local function MaskID(id)
-    -- 1. URL encode ID จริง
     local encoded = ""
     for i = 1, #id do
         encoded = encoded .. string.format("%%%02X", string.byte(id:sub(i,i)))
     end
-    -- 2. ต่อท้าย Junk ยาวๆ + &%69=00 + ID ที่ encode แล้ว
-    local longJunk = _JUNK .. string.rep(_JUNK, 10) .. HttpService:GenerateGUID(false)
+    local longJunk = _JUNK .. string.rep(_JUNK, 5) .. HttpService:GenerateGUID(false)
     return longJunk .. "&%69=00" .. encoded
 end
 
--- [[ 🛡️ LOGIC CLEAN ID (หมวด 1) ]] --
+-- [[ 🛡️ LOGIC CLEAN ID ]] --
 local function CleanID(str)
     if not str or type(str) ~= "string" then return nil end
     local num = str:match("%d+")
@@ -40,9 +38,9 @@ local function CleanID(str)
 end
 
 local Window = Rayfield:CreateWindow({
-   Name = "GuHon V19 | FINAL CLEAN (By.Honkuki78)",
+   Name = "GuHon V19 | SYNC (By.Honkuki78)",
    LoadingTitle = "GuHon XD & Honkuki78",
-   LoadingSubtitle = "Logger + Masking + Vault",
+   LoadingSubtitle = "All Tabs Synced",
    ConfigurationSaving = { Enabled = false },
    Theme = "Default"
 })
@@ -55,10 +53,9 @@ Tab1:CreateButton({
    Name = "🛰️ [ ดึงคนใกล้ที่สุด ]",
    Callback = function()
        local target, dist = nil, math.huge
-       local lp = game.Players.LocalPlayer
        for _, p in pairs(game.Players:GetPlayers()) do
-           if p ~= lp and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-               local d = (lp.Character.HumanoidRootPart.Position - p.Character.HumanoidRootPart.Position).Magnitude
+           if p ~= game.Players.LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+               local d = (game.Players.LocalPlayer.Character.HumanoidRootPart.Position - p.Character.HumanoidRootPart.Position).Magnitude
                if d < dist then target, dist = p, d end
            end
        end
@@ -75,23 +72,25 @@ Tab1:CreateButton({
    end
 })
 
--- [[ 📑 หมวดหมู่ที่ 2: Main Broadcast (เพิ่ม Junk Masking & Loop) ]] --
+-- [[ 📑 หมวดหมู่ที่ 2: Main Broadcast (ศูนย์กลางการเล่นเพลง) ]] --
 local PlayTab = Window:CreateTab("Main Broadcast", 4483362458)
 local SongTitle = PlayTab:CreateLabel("🎵 เพลง: -")
 local TimeLabel = PlayTab:CreateLabel("⏳ เวลาเล่น: 00:00 / 00:00")
 
+-- *** ฟังก์ชันศูนย์กลาง (ใช้ซิงค์กันทั้งสคริปต์) ***
 local function RunMusic(id)
-    local playID = id or CurrentID
-    if playID == "" then return end
+    if id then CurrentID = id end -- ถ้าส่ง ID มาใหม่ให้เปลี่ยน CurrentID ทันที
+    if CurrentID == "" then return end
+    
     if VisualSound then VisualSound:Destroy() end
     
-    -- ส่ง Payload แบบกันดึง
-    local maskedPayload = MaskID(playID)
+    -- ยิงรีโมทแบบ Masking
+    local maskedPayload = MaskID(CurrentID)
     VehicleRemote:FireServer("PickingScooterMusicText", maskedPayload, true)
     
-    -- ระบบเช็คเวลา (ใช้ ID จริงในฝั่ง Client)
+    -- ระบบซิงค์สถานะ
     VisualSound = Instance.new("Sound", game:GetService("SoundService"))
-    VisualSound.SoundId = "rbxassetid://"..playID
+    VisualSound.SoundId = "rbxassetid://"..CurrentID
     VisualSound.Volume = 0 
     task.spawn(function()
         repeat task.wait(0.1) until VisualSound.TimeLength > 0
@@ -99,7 +98,7 @@ local function RunMusic(id)
         StartTime = tick()
         IsPlaying = true
         VisualSound:Play()
-        local info = MarketplaceService:GetProductInfo(tonumber(playID))
+        local info = MarketplaceService:GetProductInfo(tonumber(CurrentID))
         SongTitle:Set("🎵 เพลง: " .. info.Name)
     end)
 end
@@ -110,23 +109,40 @@ PlayTab:CreateToggle({
    Callback = function(v) IsLooping = v end,
 })
 
-PlayTab:CreateButton({ Name = "🔥 [ ส่งรีโมทเปิดเพลง ]", Callback = function() RunMusic() end })
+PlayTab:CreateButton({ 
+    Name = "🔥 [ ส่งรีโมทเปิดเพลง ]", 
+    Callback = function() RunMusic() end 
+})
 
--- [[ 📑 หมวดหมู่ที่ 3: Music Vault (ตู้เซฟเพลง) ]] --
+PlayTab:CreateButton({
+   Name = "⏹️ หยุดส่งรีโมท",
+   Callback = function()
+       IsPlaying = false
+       VehicleRemote:FireServer("PickingScooterMusicText", "", true)
+       if VisualSound then VisualSound:Stop() end
+       TimeLabel:Set("⏳ เวลาเล่น: 00:00 / 00:00")
+   end
+})
+
+-- [[ 📑 หมวดหมู่ที่ 3: Music Vault (ซิงค์การเล่นกับหมวด 2) ]] --
 local VaultTab = Window:CreateTab("Music Vault", 4483362458)
 local SaveNameInput, SaveIDInput = "", ""
 
-VaultTab:CreateInput({ Name = "1. ใส่ชื่อเพลง", PlaceholderText = "ตั้งชื่อ...", Callback = function(t) SaveNameInput = t end })
-VaultTab:CreateInput({ Name = "2. ใส่ ID เพลง", PlaceholderText = "ใส่ ID...", Callback = function(t) SaveIDInput = CleanID(t) or t end })
+VaultTab:CreateInput({ Name = "1. ใส่ชื่อเพลง", PlaceholderText = "ตั้งชื่อที่นี่...", Callback = function(t) SaveNameInput = t end })
+VaultTab:CreateInput({ Name = "2. ใส่ ID เพลง", PlaceholderText = "ใส่ ID ที่นี่...", Callback = function(t) SaveIDInput = CleanID(t) or t end })
 
+-- ฟังก์ชันสร้างปุ่มเล่นเพลงในตู้เซฟที่ซิงค์กับหมวด 2
 local function AddSongButton(name, id)
     VaultTab:CreateButton({
         Name = "▶️ เล่น: " .. name,
         Callback = function()
-            CurrentID = id
+            -- ซิงค์ข้อมูลและสั่งรันผ่านฟังก์ชันหลัก
             setclipboard(id)
-            RunMusic(id)
-            Window:SelectTab(PlayTab) -- สลับหน้าไปหมวด 2 ทันที
+            RunMusic(id) 
+            
+            -- สลับหน้าไปหมวด 2 เพื่อดูสถานะที่ซิงค์กัน
+            Window:SelectTab(PlayTab)
+            Rayfield:Notify({Title = "Synced Play", Content = "กำลังเล่นจากตู้เซฟ: "..name, Duration = 2})
         end
     })
 end
@@ -138,8 +154,8 @@ VaultTab:CreateButton({
        if SaveNameInput ~= "" and finalID ~= "" then
            table.insert(SavedSongs, {Name = SaveNameInput, ID = finalID})
            SaveToFile()
-           AddSongButton(SaveNameInput, finalID) -- สร้างปุ่มให้ทันที
-           Rayfield:Notify({Title = "สำเร็จ!", Content = "บันทึกเรียบร้อย", Duration = 2})
+           AddSongButton(SaveNameInput, finalID)
+           Rayfield:Notify({Title = "สำเร็จ!", Content = "บันทึกและซิงค์ข้อมูลแล้ว", Duration = 2})
        end
    end
 })
@@ -147,7 +163,7 @@ VaultTab:CreateButton({
 VaultTab:CreateSection("รายการเพลงที่เซฟไว้")
 for _, item in pairs(SavedSongs) do AddSongButton(item.Name, item.ID) end
 
--- [[ ⏳ SYSTEM LOOP ]] --
+-- [[ ⏳ SYSTEM LOOP (เช็คสถานะการเล่นที่ซิงค์กัน) ]] --
 task.spawn(function()
     while true do
         if IsPlaying and SongDuration > 0 then
@@ -160,4 +176,3 @@ task.spawn(function()
         task.wait(0.1)
     end
 end)
-
