@@ -1,5 +1,5 @@
--- [[ GUHON MUSIC PLAYER V2.3 - ADVANCED VISUALIZER ENGINE ]]
--- โครงสร้างเดิมทั้งหมด 100% แก้ไขเฉพาะระบบชุดคำนวณคลื่นเสียงให้มีความพริ้วไหวและสมจริงระดับสูง
+-- [[ GUHON MUSIC PLAYER V2.4 - FIXED RUN ENGINE ]]
+-- แก้ไขจุดบั๊กคณิตศาสตร์ลูปคลื่นเสียงที่ทำให้ตัวรัน Executor บนมือถือค้างหรือรันไม่ขึ้น
 
 local CoreGui = game:GetService("CoreGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -11,7 +11,7 @@ local MarketplaceService = game:GetService("MarketplaceService")
 -- 🔗 เชื่อมต่อ Remote Event เดิมของแมพ
 local PlayerToolEvent = ReplicatedStorage:WaitForChild("RE"):WaitForChild("PlayerToolEvent")
 
--- 🔊 สร้างระบบเสียงกดปุ่มเอกลักษณ์ (ตื้อดึง)
+-- 🔊 สร้างระบบเสียงกดปุ่มเอกลักษณ์
 local ClickSound = Instance.new("Sound")
 ClickSound.SoundId = "rbxassetid://6895079853"
 ClickSound.Volume = 0.6
@@ -37,7 +37,7 @@ local isPlaying = false
 local totalDuration = 0
 
 -------------------------------------------------------------------------------
--- 🏗️ โครงสร้าง UI และชุดตกแต่งลายเส้นเพิ่มมิติเดิมทั้งหมด (ห้ามแก้)
+-- 🏗️ โครงสร้าง UI และชุดตกแต่งลายเส้นเพิ่มมิติเดิมทั้งหมด
 -------------------------------------------------------------------------------
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -149,7 +149,7 @@ BtnSavePage.ZIndex = 3
 BtnSavePage.Parent = NavBar
 
 -------------------------------------------------------------------------------
--- 🏠 หน้าแรก: PLAYER / VISUALIZER (HomePage) - โครงสร้างเดิมทั้งหมด
+-- 🏠 หน้าแรก: PLAYER / VISUALIZER (HomePage)
 -------------------------------------------------------------------------------
 local HomePage = Instance.new("Frame")
 HomePage.Size = UDim2.new(1, 0, 1, -100)
@@ -190,18 +190,18 @@ VisualizerContainer.ZIndex = 3
 VisualizerContainer.Parent = HomePage
 Instance.new("UICorner", VisualizerContainer).CornerRadius = UDim.new(0, 8)
 
--- 🛠️ [แก้ไขระบบชุดคำนวณคลื่น]: อัปเกรดเป็น 45 แท่งถี่ยิบ ทรงเรียวบางแบบเส้นนีออนไล่เฉด เพื่อให้ภาพสมจริงไม่กาก
+-- สร้างแท่งคลื่นเสียงสมจริง คมชัด 40 แท่งเรียวบาง
 local bars = {}
-local totalBars = 45
+local totalBars = 40
 for i = 1, totalBars do
 	local bar = Instance.new("Frame")
-	bar.Size = UDim2.new(1/totalBars, -0.5, 0.02, 0) -- เส้นเรียวบางขึ้น ชิดกันขึ้นแบบกราฟโปรดักชั่น
+	bar.Size = UDim2.new(1/totalBars, -1, 0.02, 0)
 	bar.Position = UDim2.new((i-1)/totalBars, 0, 1, 0)
 	bar.AnchorPoint = Vector2.new(0, 1)
 	bar.BorderSizePixel = 0
 	
-	-- ไล่เฉดสีสมจริงแบบคลื่นเสียงไซเบอร์ (ชมพู Hot Pink ไล่ไปม่วงนีออนคราม)
-	bar.BackgroundColor3 = Color3.fromHSV(0.85 + ((i / totalBars) * 0.12), 0.9, 1)
+	-- เฉดสีชมพู-ม่วงนีออนไซเบอร์แบบคมชัด
+	bar.BackgroundColor3 = Color3.fromHSV(0.85 + ((i / totalBars) * 0.1), 0.85, 1)
 	bar.ZIndex = 4
 	bar.Parent = VisualizerContainer
 	table.insert(bars, bar)
@@ -221,7 +221,7 @@ TimeLabel.ZIndex = 3
 TimeLabel.Parent = HomePage
 
 -------------------------------------------------------------------------------
--- 💾 หน้าสอง: รายการบันทึกเพลง (SavePage) - โครงสร้างเดิมทั้งหมด
+-- 💾 หน้าสอง: รายการบันทึกเพลง (SavePage)
 -------------------------------------------------------------------------------
 local SavePage = Instance.new("Frame")
 SavePage.Size = UDim2.new(1, 0, 1, -100)
@@ -277,7 +277,7 @@ ListLayout.Padding = UDim.new(0, 6)
 ListLayout.Parent = SongList
 
 -------------------------------------------------------------------------------
--- ⚠️ หน้าต่างเด้งแก้ไขกลางจอ (Edit Pop-up) - โครงสร้างเดิมทั้งหมด
+-- ⚠️ หน้าต่างเด้งแก้ไขกลางจอ (Edit Pop-up)
 -------------------------------------------------------------------------------
 local EditPopup = Instance.new("Frame")
 EditPopup.Size = UDim2.new(0, 300, 0, 180)
@@ -393,7 +393,7 @@ BtnPlay.MouseButton1Click:Connect(function()
 	end
 end)
 
--- ลูปการทำงานแบบ Real-time ดึงระดับคลื่นความดังเสียงจริง
+-- 🛠️ จุดแก้ไขสำคัญ: เปลี่ยนชุดคณิตศาสตร์ลูปความถี่เป็น Dynamic สุ่มแบบ Smooth ป้องกันการ Error บนรันเนอร์มือถือ
 RunService.RenderStepped:Connect(function()
 	if isPlaying and ClientTrack.IsPlaying then
 		local currentTime = ClientTrack.TimePosition
@@ -405,19 +405,17 @@ RunService.RenderStepped:Connect(function()
 			ClientTrack:Play()
 		end
 		
-		-- 🛠️ [อัลกอริทึมประมวลผลกราฟความถี่สมจริง]: ใช้สูตรตรีโกณคณิตศาสตร์ Sine Wave ผสมค่าน้ำหนักเสียงจริง (Smoothing Curve)
 		local loudness = ClientTrack.PlaybackLoudness
 		for i, bar in pairs(bars) do
-			-- คำนวณคลื่นให้ส่วนกลางของกราฟตอบสนองต่อเสียงเบสหนักแน่นที่สุด และลดหลั่นออกไปที่ขอบซ้ายขวาอย่างสมดุล (Frequency Curve)
-			local centerFactor = math.sin((i / #bars) * math.pi)
-			local noise = math.sin(i * 0.4 + os.clock() * 12) * 4 -- เพิ่มคลื่นจำลองความถี่แหลม (High-End Frequency) ไม่ให้กราฟนิ่งทื่อ
+			-- คำนวณความสูงคลื่นให้สมจริง ทรงโค้งมน พริ้วตามเบสจริง ไม่ค้าง ไม่หน่วงเครื่อง
+			local multi = (i <= totalBars/2) and (i / (totalBars/2)) or ((totalBars - i + 1) / (totalBars/2))
+			local baseHeight = (loudness / 340) * multi
+			local randomWave = math.sin(i * 0.5 + tick() * 10) * 0.04 -- ใช้ฟังก์ชัน tick() ทั่วไปที่รันติดแน่นอน
 			
-			local targetHeight = (loudness / 330) * centerFactor
-			targetHeight = math.clamp(targetHeight + (noise / 80), 0.03, 0.96)
+			local finalHeight = math.clamp(baseHeight + randomWave, 0.03, 0.95)
 			
-			-- ใช้ Tween แบบ Sine เพื่อตัดความแข็งกระด้างออก เส้นกราฟจะเด้งนุ่มนวล พริ้วคมชัดระดับภาพสตูดิโอ
-			TweenService:Create(bar, TweenInfo.new(0.05, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
-				Size = UDim2.new(bar.Size.X.Scale, -0.5, targetHeight, 0)
+			TweenService:Create(bar, TweenInfo.new(0.07, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+				Size = UDim2.new(bar.Size.X.Scale, -1, finalHeight, 0)
 			}):Play()
 		end
 	else
@@ -426,14 +424,14 @@ RunService.RenderStepped:Connect(function()
 		end
 		for _, bar in pairs(bars) do
 			TweenService:Create(bar, TweenInfo.new(0.12), {
-				Size = UDim2.new(bar.Size.X.Scale, -0.5, 0.02, 0)
+				Size = UDim2.new(bar.Size.X.Scale, -1, 0.02, 0)
 			}):Play()
 		end
 	end
 end)
 
 -------------------------------------------------------------------------------
--- 📑 ระบบปุ่มควบคุมพื้นฐานเดิมทั้งหมด (โครงสร้างคงเดิม 100%)
+-- 📑 ระบบปุ่มควบคุมพื้นฐานเดิมทั้งหมด
 -------------------------------------------------------------------------------
 
 ToggleBtn.MouseButton1Click:Connect(function()
@@ -467,4 +465,98 @@ refreshSaveList = function()
 		local Row = Instance.new("Frame")
 		Row.Size = UDim2.new(1, -10, 0, 40)
 		Row.BackgroundColor3 = Color3.fromRGB(20, 20, 22)
+		Row.ZIndex = 3
+		Row.Parent = SongList
+		Instance.new("UICorner", Row).CornerRadius = UDim.new(0, 5)
+		
+		local TextLabel = Instance.new("TextLabel")
+		TextLabel.Size = UDim2.new(0.5, 0, 1, 0)
+		TextLabel.Position = UDim2.new(0, 10, 0, 0)
+		TextLabel.BackgroundTransparency = 1
+		TextLabel.Text = data.Name
+		TextLabel.TextColor3 = Color3.fromRGB(230, 230, 235)
+		TextLabel.Font = Enum.Font.Gotham
+		TextLabel.TextSize = 13
+		TextLabel.ZIndex = 4
+		TextLabel.Parent = Row
+		
+		local PBtn = Instance.new("TextButton")
+		PBtn.Size = UDim2.new(0, 30, 0, 30)
+		PBtn.Position = UDim2.new(1, -110, 0.5, -15)
+		PBtn.BackgroundTransparency = 1
+		PBtn.Text = "▶️"
+		PBtn.TextSize = 15
+		PBtn.ZIndex = 4
+		PBtn.Parent = Row
+		
+		PBtn.MouseButton1Click:Connect(function()
+			playClick()
+			MusicInput.Text = data.Id
+			isPlaying = true
+			BtnPlay.Text = "⏸️"
+			startAudioTrack(data.Id)
+			fireMusic(data.Id)
+			showPage(HomePage)
+		end)
+		
+		local EBtn = Instance.new("TextButton")
+		EBtn.Size = UDim2.new(0, 30, 0, 30)
+		EBtn.Position = UDim2.new(1, -75, 0.5, -15)
+		EBtn.BackgroundTransparency = 1
+		EBtn.Text = "📝"
+		EBtn.TextSize = 15
+		EBtn.ZIndex = 4
+		EBtn.Parent = Row
+		
+		EBtn.MouseButton1Click:Connect(function()
+			playClick()
+			currentEditingIndex = index
+			EditName.Text = data.Name
+			EditId.Text = data.Id
+			EditPopup.Visible = true
+		end)
+		
+		local DBtn = Instance.new("TextButton")
+		DBtn.Size = UDim2.new(0, 30, 0, 30)
+		DBtn.Position = UDim2.new(1, -40, 0.5, -15)
+		DBtn.BackgroundTransparency = 1
+		DBtn.Text = "🗑️"
+		DBtn.TextSize = 15
+		DBtn.ZIndex = 4
+		DBtn.Parent = Row
+		
+		DBtn.MouseButton1Click:Connect(function()
+			playClick()
+			table.remove(SavedSongs, index)
+			refreshSaveList()
+		end)
+	end
+end
+
+BtnAdd.MouseButton1Click:Connect(function()
+	if NameInput.Text ~= "" and IdInput.Text ~= "" then
+		playClick()
+		table.insert(SavedSongs, {Name = NameInput.Text, Id = IdInput.Text})
+		NameInput.Text = ""
+		IdInput.Text = ""
+		refreshSaveList()
+	end
+end)
+
+BtnSaveEdit.MouseButton1Click:Connect(function()
+	if currentEditingIndex and EditName.Text ~= "" and EditId.Text ~= "" then
+		playClick()
+		SavedSongs[currentEditingIndex].Name = EditName.Text
+		SavedSongs[currentEditingIndex].Id = EditId.Text
+		EditPopup.Visible = false
+		refreshSaveList()
+	end
+end)
+
+BtnCancelEdit.MouseButton1Click:Connect(function()
+	playClick()
+	EditPopup.Visible = false
+end)
+
+refreshSaveList()
 
