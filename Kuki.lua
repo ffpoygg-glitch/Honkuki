@@ -1,5 +1,5 @@
--- [[ GUHON MUSIC PLAYER V2.1 - FIXED RUNTIME FOR EXECUTOR ]]
--- โครงสร้างเดิมทั้งหมด 100% ห้ามแก้ชิ้นส่วนอื่น แก้ไขเฉพาะบั๊ก Sound Engine ที่ทำให้รันไม่ติด
+-- [[ GUHON MUSIC PLAYER V2.2 - FIXED TIMELABEL RESET & SAVE LIST DISPLAY ]]
+-- โครงสร้างเดิมทั้งหมด 100% แก้ไขเฉพาะระบบเวลาตอนหยุดเพลง และระบบรีเฟรชรายการเซฟ
 
 local CoreGui = game:GetService("CoreGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -21,11 +21,11 @@ local function playClick()
 	ClickSound:Play()
 end
 
--- 🎵 สร้าง Sound Object สำหรับดึงสถานะเพลง (ย้ายไปไว้ใน Camera เพื่อแก้บั๊กดึงความดังไม่ขึ้นบน Executor)
+-- 🎵 สร้าง Sound Object สำหรับดึงสถานะเพลง
 local Camera = workspace.CurrentCamera or workspace:WaitForChild("Camera")
 local ClientTrack = Camera:FindFirstChild("GuhonClientTrack") or Instance.new("Sound")
 ClientTrack.Name = "GuhonClientTrack"
-ClientTrack.Volume = 0 -- เปิดเสียงเป็น 0 เพื่อไม่ให้ซ้อนกับวิทยุในเกม
+ClientTrack.Volume = 0 
 ClientTrack.Parent = Camera
 
 local SavedSongs = {
@@ -75,7 +75,7 @@ Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
 MainFrame.Active = true
 MainFrame.Draggable = true
 
--- ✨ เพิ่มเส้นขอบเรืองแสงรอบหน้าต่าง (Glow Stroke)
+-- ✨ เส้นขอบเรืองแสงรอบหน้าต่าง (Glow Stroke)
 local FrameGlow = Instance.new("UIStroke")
 FrameGlow.Color = Color3.fromRGB(255, 0, 127)
 FrameGlow.Thickness = 1.2
@@ -329,11 +329,11 @@ Instance.new("UICorner", BtnCancelEdit).CornerRadius = UDim.new(0, 6)
 
 
 -------------------------------------------------------------------------------
--- ⚙️ ฟังก์ชันคำนวณและแกนระบบ (แก้เฉพาะจุด Yield บั๊กรันไม่ติด)
+-- ⚙️ ฟังก์ชันคำนวณและแกนระบบ
 -------------------------------------------------------------------------------
 
 local function formatTime(seconds)
-	if not seconds or seconds ~= seconds then return "00:00" end -- ดักกันค่า NaN บั๊กสคริปต์
+	if not seconds or seconds ~= seconds or seconds <= 0 then return "00:00" end
 	local mins = math.floor(seconds / 60)
 	local secs = math.floor(seconds % 60)
 	return string.format("%02d:%02d", mins, secs)
@@ -350,19 +350,16 @@ local function fireMusic(songId)
 	end
 end
 
--- แก้ไขจุดที่ทำให้รันไม่ติด: โหลดข้อมูลแยก Thread ป้องกันสคริปต์ค้าง
 local function startAudioTrack(songId)
 	if songId and songId ~= "" and tonumber(songId) then
 		ClientTrack:Stop()
 		ClientTrack.SoundId = "rbxassetid://" .. songId
 		totalDuration = 0
 		
-		-- ใช้ task.spawn แยกงานออกไป ไม่ให้ดึงขัดจังหวะการเปิด UI
 		task.spawn(function()
 			pcall(function()
 				local assetInfo = MarketplaceService:GetProductInfo(tonumber(songId))
 				if assetInfo and assetInfo.AssetTypeId == 3 then
-					-- รอดักให้ Sound โหลดสำเร็จก่อนค่อยดึงข้อมูลจริงมาเซ็ต
 					if not ClientTrack.IsLoaded then ClientTrack.Loaded:Wait() end
 					totalDuration = ClientTrack.TimeLength
 				end
@@ -372,10 +369,12 @@ local function startAudioTrack(songId)
 		ClientTrack:Play()
 	else
 		ClientTrack:Stop()
+		ClientTrack.SoundId = "" -- เคลียร์ไอดีเก่าออกเมื่อหยุด
 		totalDuration = 0
 	end
 end
 
+-- 🛠️ [แก้ไขจุดที่ 1]: ระบบหยุดเพลง จะเคลียร์ค่าเวลาทิ้งเป็น 00:00 ทันที ไม่จำค่าเพลงเก่า
 BtnPlay.MouseButton1Click:Connect(function()
 	playClick()
 	isPlaying = not isPlaying
@@ -385,8 +384,10 @@ BtnPlay.MouseButton1Click:Connect(function()
 		fireMusic(MusicInput.Text)
 	else
 		BtnPlay.Text = "▶️"
+		isPlaying = false -- สั่งหยุดสถานะลูป Real-time
 		startAudioTrack("")
 		fireMusic("")
+		TimeLabel.Text = "00:00 / 00:00" -- เคลียร์ข้อความหน้าจอทันที
 	end
 end)
 
@@ -402,7 +403,6 @@ RunService.RenderStepped:Connect(function()
 			ClientTrack:Play()
 		end
 		
-		-- ดึงค่าเบสจริงจากคลื่นเสียงมาประมวลผล (ตอนนี้ขยับได้แล้วเพราะย้ายไปไว้ที่ Camera)
 		local loudness = ClientTrack.PlaybackLoudness
 		for i, bar in pairs(bars) do
 			local factor = math.sin((i / #bars) * math.pi) * (loudness / 320)
@@ -413,7 +413,10 @@ RunService.RenderStepped:Connect(function()
 			}):Play()
 		end
 	else
-		TimeLabel.Text = "00:00 / " .. formatTime(ClientTrack.TimeLength)
+		-- เมื่อไม่ได้เล่นเพลง ให้ล็อกหน้าจอและแท่งไฟไว้ที่ศูนย์ทั้งหมด
+		if not isPlaying then
+			TimeLabel.Text = "00:00 / 00:00"
+		end
 		for _, bar in pairs(bars) do
 			TweenService:Create(bar, TweenInfo.new(0.15), {
 				Size = UDim2.new(bar.Size.X.Scale, -2, 0.05, 0)
@@ -431,6 +434,7 @@ ToggleBtn.MouseButton1Click:Connect(function()
 	MainFrame.Visible = not MainFrame.Visible
 end)
 
+-- ตัวสลับหน้าแสดงผล
 local function showPage(page)
 	playClick()
 	HomePage.Visible = false
@@ -439,10 +443,16 @@ local function showPage(page)
 	Title.Text = (page == HomePage) and "PLAYER / VISUALIZER" or "SAVE LIST"
 end
 
-BtnHome.MouseButton1Click:Connect(function() showPage(HomePage) end)
-BtnSavePage.MouseButton1Click:Connect(function() showPage(SavePage) end)
+-- 🛠️ [แก้ไขจุดที่ 2]: แก้ไขปุ่มกดเปลี่ยนหน้าเพื่อให้มันดึงข้อมูลรายการเพลงขึ้นมาโชว์เสมอเวลาสลับหน้า
+local function refreshSaveList() end -- ประกาศไว้ล่วงหน้าเพื่อเลี่ยงการชนของฟังก์ชัน
 
-local function refreshSaveList()
+BtnHome.MouseButton1Click:Connect(function() showPage(HomePage) end)
+BtnSavePage.MouseButton1Click:Connect(function() 
+	showPage(SavePage) 
+	refreshSaveList() -- สั่งอัปเดตลิสต์ทันทีที่สลับมาหน้านี้ รายการเพลงที่เซฟไว้จะได้เด้งขึ้นมา
+end)
+
+refreshSaveList = function()
 	for _, child in pairs(SongList:GetChildren()) do
 		if child:IsA("Frame") then child:Destroy() end
 	end
@@ -459,7 +469,6 @@ local function refreshSaveList()
 		local TextLabel = Instance.new("TextLabel")
 		TextLabel.Size = UDim2.new(0.5, 0, 1, 0)
 		TextLabel.Position = UDim2.new(0, 10, 0, 0)
-		TextLabel.OriginalSize = Row.Size -- ยึดไว้เฉยๆ
 		TextLabel.BackgroundTransparency = 1
 		TextLabel.Text = data.Name
 		TextLabel.TextColor3 = Color3.fromRGB(230, 230, 235)
@@ -547,3 +556,4 @@ BtnCancelEdit.MouseButton1Click:Connect(function()
 end)
 
 refreshSaveList()
+
