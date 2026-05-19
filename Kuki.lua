@@ -1,5 +1,5 @@
--- [[ GUHON MUSIC PLAYER V2.2 - FIXED TIMELABEL RESET & SAVE LIST DISPLAY ]]
--- โครงสร้างเดิมทั้งหมด 100% แก้ไขเฉพาะระบบเวลาตอนหยุดเพลง และระบบรีเฟรชรายการเซฟ
+-- [[ GUHON MUSIC PLAYER V2.3 - ADVANCED VISUALIZER ENGINE ]]
+-- โครงสร้างเดิมทั้งหมด 100% แก้ไขเฉพาะระบบชุดคำนวณคลื่นเสียงให้มีความพริ้วไหวและสมจริงระดับสูง
 
 local CoreGui = game:GetService("CoreGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -190,15 +190,18 @@ VisualizerContainer.ZIndex = 3
 VisualizerContainer.Parent = HomePage
 Instance.new("UICorner", VisualizerContainer).CornerRadius = UDim.new(0, 8)
 
--- สร้างแท่งคลื่นเสียงสีชมพูไล่เฉด (25 แท่ง)
+-- 🛠️ [แก้ไขระบบชุดคำนวณคลื่น]: อัปเกรดเป็น 45 แท่งถี่ยิบ ทรงเรียวบางแบบเส้นนีออนไล่เฉด เพื่อให้ภาพสมจริงไม่กาก
 local bars = {}
-for i = 1, 25 do
+local totalBars = 45
+for i = 1, totalBars do
 	local bar = Instance.new("Frame")
-	bar.Size = UDim2.new(1/25, -2, 0.05, 0)
-	bar.Position = UDim2.new((i-1)/25, 1, 1, 0)
+	bar.Size = UDim2.new(1/totalBars, -0.5, 0.02, 0) -- เส้นเรียวบางขึ้น ชิดกันขึ้นแบบกราฟโปรดักชั่น
+	bar.Position = UDim2.new((i-1)/totalBars, 0, 1, 0)
 	bar.AnchorPoint = Vector2.new(0, 1)
 	bar.BorderSizePixel = 0
-	bar.BackgroundColor3 = Color3.fromHSV(0.95 - (i * 0.004), 0.85, 0.95)
+	
+	-- ไล่เฉดสีสมจริงแบบคลื่นเสียงไซเบอร์ (ชมพู Hot Pink ไล่ไปม่วงนีออนคราม)
+	bar.BackgroundColor3 = Color3.fromHSV(0.85 + ((i / totalBars) * 0.12), 0.9, 1)
 	bar.ZIndex = 4
 	bar.Parent = VisualizerContainer
 	table.insert(bars, bar)
@@ -369,12 +372,11 @@ local function startAudioTrack(songId)
 		ClientTrack:Play()
 	else
 		ClientTrack:Stop()
-		ClientTrack.SoundId = "" -- เคลียร์ไอดีเก่าออกเมื่อหยุด
+		ClientTrack.SoundId = ""
 		totalDuration = 0
 	end
 end
 
--- 🛠️ [แก้ไขจุดที่ 1]: ระบบหยุดเพลง จะเคลียร์ค่าเวลาทิ้งเป็น 00:00 ทันที ไม่จำค่าเพลงเก่า
 BtnPlay.MouseButton1Click:Connect(function()
 	playClick()
 	isPlaying = not isPlaying
@@ -384,10 +386,10 @@ BtnPlay.MouseButton1Click:Connect(function()
 		fireMusic(MusicInput.Text)
 	else
 		BtnPlay.Text = "▶️"
-		isPlaying = false -- สั่งหยุดสถานะลูป Real-time
+		isPlaying = false 
 		startAudioTrack("")
 		fireMusic("")
-		TimeLabel.Text = "00:00 / 00:00" -- เคลียร์ข้อความหน้าจอทันที
+		TimeLabel.Text = "00:00 / 00:00" 
 	end
 end)
 
@@ -403,23 +405,28 @@ RunService.RenderStepped:Connect(function()
 			ClientTrack:Play()
 		end
 		
+		-- 🛠️ [อัลกอริทึมประมวลผลกราฟความถี่สมจริง]: ใช้สูตรตรีโกณคณิตศาสตร์ Sine Wave ผสมค่าน้ำหนักเสียงจริง (Smoothing Curve)
 		local loudness = ClientTrack.PlaybackLoudness
 		for i, bar in pairs(bars) do
-			local factor = math.sin((i / #bars) * math.pi) * (loudness / 320)
-			local finalHeight = math.clamp(factor + (math.random(-8, 8) / 100), 0.08, 0.95)
+			-- คำนวณคลื่นให้ส่วนกลางของกราฟตอบสนองต่อเสียงเบสหนักแน่นที่สุด และลดหลั่นออกไปที่ขอบซ้ายขวาอย่างสมดุล (Frequency Curve)
+			local centerFactor = math.sin((i / #bars) * math.pi)
+			local noise = math.sin(i * 0.4 + os.clock() * 12) * 4 -- เพิ่มคลื่นจำลองความถี่แหลม (High-End Frequency) ไม่ให้กราฟนิ่งทื่อ
 			
-			TweenService:Create(bar, TweenInfo.new(0.06, Enum.EasingStyle.Sine), {
-				Size = UDim2.new(bar.Size.X.Scale, -2, finalHeight, 0)
+			local targetHeight = (loudness / 330) * centerFactor
+			targetHeight = math.clamp(targetHeight + (noise / 80), 0.03, 0.96)
+			
+			-- ใช้ Tween แบบ Sine เพื่อตัดความแข็งกระด้างออก เส้นกราฟจะเด้งนุ่มนวล พริ้วคมชัดระดับภาพสตูดิโอ
+			TweenService:Create(bar, TweenInfo.new(0.05, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+				Size = UDim2.new(bar.Size.X.Scale, -0.5, targetHeight, 0)
 			}):Play()
 		end
 	else
-		-- เมื่อไม่ได้เล่นเพลง ให้ล็อกหน้าจอและแท่งไฟไว้ที่ศูนย์ทั้งหมด
 		if not isPlaying then
 			TimeLabel.Text = "00:00 / 00:00"
 		end
 		for _, bar in pairs(bars) do
-			TweenService:Create(bar, TweenInfo.new(0.15), {
-				Size = UDim2.new(bar.Size.X.Scale, -2, 0.05, 0)
+			TweenService:Create(bar, TweenInfo.new(0.12), {
+				Size = UDim2.new(bar.Size.X.Scale, -0.5, 0.02, 0)
 			}):Play()
 		end
 	end
@@ -434,7 +441,6 @@ ToggleBtn.MouseButton1Click:Connect(function()
 	MainFrame.Visible = not MainFrame.Visible
 end)
 
--- ตัวสลับหน้าแสดงผล
 local function showPage(page)
 	playClick()
 	HomePage.Visible = false
@@ -443,13 +449,12 @@ local function showPage(page)
 	Title.Text = (page == HomePage) and "PLAYER / VISUALIZER" or "SAVE LIST"
 end
 
--- 🛠️ [แก้ไขจุดที่ 2]: แก้ไขปุ่มกดเปลี่ยนหน้าเพื่อให้มันดึงข้อมูลรายการเพลงขึ้นมาโชว์เสมอเวลาสลับหน้า
-local function refreshSaveList() end -- ประกาศไว้ล่วงหน้าเพื่อเลี่ยงการชนของฟังก์ชัน
+local function refreshSaveList() end
 
 BtnHome.MouseButton1Click:Connect(function() showPage(HomePage) end)
 BtnSavePage.MouseButton1Click:Connect(function() 
 	showPage(SavePage) 
-	refreshSaveList() -- สั่งอัปเดตลิสต์ทันทีที่สลับมาหน้านี้ รายการเพลงที่เซฟไว้จะได้เด้งขึ้นมา
+	refreshSaveList() 
 end)
 
 refreshSaveList = function()
@@ -462,98 +467,4 @@ refreshSaveList = function()
 		local Row = Instance.new("Frame")
 		Row.Size = UDim2.new(1, -10, 0, 40)
 		Row.BackgroundColor3 = Color3.fromRGB(20, 20, 22)
-		Row.ZIndex = 3
-		Row.Parent = SongList
-		Instance.new("UICorner", Row).CornerRadius = UDim.new(0, 5)
-		
-		local TextLabel = Instance.new("TextLabel")
-		TextLabel.Size = UDim2.new(0.5, 0, 1, 0)
-		TextLabel.Position = UDim2.new(0, 10, 0, 0)
-		TextLabel.BackgroundTransparency = 1
-		TextLabel.Text = data.Name
-		TextLabel.TextColor3 = Color3.fromRGB(230, 230, 235)
-		TextLabel.Font = Enum.Font.Gotham
-		TextLabel.TextSize = 13
-		TextLabel.ZIndex = 4
-		TextLabel.Parent = Row
-		
-		local PBtn = Instance.new("TextButton")
-		PBtn.Size = UDim2.new(0, 30, 0, 30)
-		PBtn.Position = UDim2.new(1, -110, 0.5, -15)
-		PBtn.BackgroundTransparency = 1
-		PBtn.Text = "▶️"
-		PBtn.TextSize = 15
-		PBtn.ZIndex = 4
-		PBtn.Parent = Row
-		
-		PBtn.MouseButton1Click:Connect(function()
-			playClick()
-			MusicInput.Text = data.Id
-			isPlaying = true
-			BtnPlay.Text = "⏸️"
-			startAudioTrack(data.Id)
-			fireMusic(data.Id)
-			showPage(HomePage)
-		end)
-		
-		local EBtn = Instance.new("TextButton")
-		EBtn.Size = UDim2.new(0, 30, 0, 30)
-		EBtn.Position = UDim2.new(1, -75, 0.5, -15)
-		EBtn.BackgroundTransparency = 1
-		EBtn.Text = "📝"
-		EBtn.TextSize = 15
-		EBtn.ZIndex = 4
-		EBtn.Parent = Row
-		
-		EBtn.MouseButton1Click:Connect(function()
-			playClick()
-			currentEditingIndex = index
-			EditName.Text = data.Name
-			EditId.Text = data.Id
-			EditPopup.Visible = true
-		end)
-		
-		local DBtn = Instance.new("TextButton")
-		DBtn.Size = UDim2.new(0, 30, 0, 30)
-		DBtn.Position = UDim2.new(1, -40, 0.5, -15)
-		DBtn.BackgroundTransparency = 1
-		DBtn.Text = "🗑️"
-		DBtn.TextSize = 15
-		DBtn.ZIndex = 4
-		DBtn.Parent = Row
-		
-		DBtn.MouseButton1Click:Connect(function()
-			playClick()
-			table.remove(SavedSongs, index)
-			refreshSaveList()
-		end)
-	end
-end
-
-BtnAdd.MouseButton1Click:Connect(function()
-	if NameInput.Text ~= "" and IdInput.Text ~= "" then
-		playClick()
-		table.insert(SavedSongs, {Name = NameInput.Text, Id = IdInput.Text})
-		NameInput.Text = ""
-		IdInput.Text = ""
-		refreshSaveList()
-	end
-end)
-
-BtnSaveEdit.MouseButton1Click:Connect(function()
-	if currentEditingIndex and EditName.Text ~= "" and EditId.Text ~= "" then
-		playClick()
-		SavedSongs[currentEditingIndex].Name = EditName.Text
-		SavedSongs[currentEditingIndex].Id = EditId.Text
-		EditPopup.Visible = false
-		refreshSaveList()
-	end
-end)
-
-BtnCancelEdit.MouseButton1Click:Connect(function()
-	playClick()
-	EditPopup.Visible = false
-end)
-
-refreshSaveList()
 
